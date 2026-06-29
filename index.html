@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>웹사이트 개발 견적서 생성기 — 오르르디자인</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+:root {
+  --primary:   #6b3cf8;
+  --primary-bg:#fbfaff;
+  --primary-border: rgba(107,60,248,0.3);
+  --body:      #363636;
+  --gray:      #878787;
+  --line:      #e5e5e5;
+  --bg:        #fafafa;
+  --white:     #ffffff;
+  --font:      'Pretendard', sans-serif;
+  --radius:    6px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font); background: #eef0f3; color: var(--body); font-size: 14px; line-height: 1.6; }
+
+/* ── 앱 레이아웃 ── */
+.app-header {
+  background: var(--body);
+  color: var(--white);
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.app-header h1 { font-size: 15px; font-weight: 600; }
+.app-header span { font-size: 12px; opacity: 0.5; margin-left: auto; }
+
+.app-body {
+  display: grid;
+  grid-template-columns: 460px 1fr;
+  height: calc(100vh - 48px);
+  overflow: hidden;
+}
+
+/* ── 폼 패널 ── */
+.form-panel {
+  background: var(--white);
+  overflow-y: auto;
+  border-right: 1px solid var(--line);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.sec-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--gray);
+  margin-bottom: 10px;
+}
+label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; color: var(--gray); }
+input[type="text"], input[type="date"], input[type="number"], textarea {
+  width: 100%; border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 7px 10px; font-family: var(--font); font-size: 13px; color: var(--body);
+  background: var(--white); outline: none; transition: border-color 0.15s;
+}
+input:focus, textarea:focus { border-color: var(--primary); }
+textarea { resize: vertical; min-height: 72px; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.form-group { margin-bottom: 10px; }
+
+/* 플랜 카드 */
+.plan-cards { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
+.plan-card {
+  border: 2px solid var(--line); border-radius: var(--radius);
+  padding: 12px 10px; cursor: pointer; transition: all 0.15s;
+  position: relative; text-align: center;
+}
+.plan-card:hover { border-color: var(--primary); }
+.plan-card.selected { border-color: var(--primary); background: var(--primary-bg); }
+.plan-card .plan-name { font-weight: 700; font-size: 13px; margin-bottom: 3px; }
+.plan-card .plan-price { color: var(--primary); font-weight: 700; font-size: 12px; }
+.plan-card .plan-meta { font-size: 10px; color: var(--gray); margin-top: 3px; }
+
+/* 기본 항목 */
+.default-items { display: flex; flex-direction: column; gap: 5px; }
+.item-row {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--bg); border-radius: var(--radius);
+  padding: 7px 10px; font-size: 12px;
+}
+.item-row.deleted { opacity: 0.35; }
+.item-row .item-name { flex: 1; font-weight: 500; }
+.item-row .item-amt { color: var(--gray); font-size: 11px; margin-left: auto; margin-right: 6px; }
+.btn-del, .btn-restore {
+  background: none; border: none; cursor: pointer;
+  font-size: 15px; line-height: 1; padding: 0 2px; opacity: 0.4; transition: opacity 0.15s;
+}
+.btn-del:hover, .btn-restore:hover { opacity: 1; }
+
+/* 추가 항목 */
+.addon-selector { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.addon-chip {
+  border: 1px solid var(--line); border-radius: 20px;
+  padding: 4px 11px; font-size: 12px; cursor: pointer;
+  background: var(--white); transition: all 0.15s; color: var(--body);
+}
+.addon-chip:hover { border-color: var(--primary); color: var(--primary); }
+.addon-chip.active { background: var(--primary); border-color: var(--primary); color: var(--white); }
+.addon-items { display: flex; flex-direction: column; gap: 5px; }
+.addon-item {
+  display: flex; align-items: center; gap: 6px;
+  background: #fdf8ff; border: 1px solid var(--primary-border);
+  border-radius: var(--radius); padding: 7px 10px;
+}
+.addon-item .addon-name { flex: 0 0 110px; font-weight: 500; font-size: 12px; }
+.addon-item input { font-size: 12px; padding: 4px 7px; }
+.addon-item input[type="number"] { width: 100px; text-align: right; }
+.addon-item input[type="text"] { width: 110px; text-align: right; }
+.addon-item .addon-label { font-size: 11px; color: var(--gray); }
+.addon-item .btn-del { margin-left: auto; }
+
+/* 직접 입력 추가 항목 */
+.custom-addon-add { display: flex; gap: 6px; margin-top: 8px; align-items: center; }
+.custom-addon-add input[type="text"] { flex: 1; font-size: 12px; padding: 6px 8px; }
+.custom-addon-add input[type="number"] { width: 100px; font-size: 12px; padding: 6px 8px; text-align: right; }
+.btn-add {
+  background: var(--body); color: var(--white); border: none; border-radius: var(--radius);
+  padding: 6px 12px; font-family: var(--font); font-size: 12px; font-weight: 600;
+  cursor: pointer; white-space: nowrap;
+}
+.btn-add:hover { background: var(--primary); }
+.btn-add-custom {
+  background: var(--body); color: var(--white); border: none; border-radius: var(--radius);
+  padding: 6px 12px; font-family: var(--font); font-size: 12px; font-weight: 600;
+  cursor: pointer; white-space: nowrap;
+}
+.btn-add-custom:hover { background: var(--primary); }
+.custom-addon-items { display: flex; flex-direction: column; gap: 5px; margin-top: 5px; }
+.custom-addon-item {
+  display: flex; align-items: center; gap: 6px;
+  background: #f0f4ff; border: 1px solid #c8d3f7;
+  border-radius: var(--radius); padding: 7px 10px;
+}
+.custom-addon-item input[type="text"] { flex: 1; font-size: 12px; padding: 4px 7px; }
+.custom-addon-item input[type="number"] { width: 100px; font-size: 12px; padding: 4px 7px; text-align: right; }
+
+/* 공급자 */
+.supplier-box { background: var(--bg); border-radius: var(--radius); padding: 12px; position: relative; }
+.supplier-box .btn-edit {
+  position: absolute; top: 10px; right: 10px;
+  background: none; border: 1px solid var(--line); border-radius: 4px;
+  font-size: 11px; padding: 3px 8px; cursor: pointer; font-family: var(--font);
+}
+.supplier-box .btn-edit:hover { border-color: var(--primary); color: var(--primary); }
+.sup-row { display: flex; gap: 8px; font-size: 12px; margin-bottom: 3px; }
+.sup-row .k { color: var(--gray); flex: 0 0 72px; }
+.sup-row .v { color: var(--body); font-weight: 500; }
+.supplier-edit-form { display: none; }
+.supplier-edit-form.show { display: block; }
+.supplier-display.hide { display: none; }
+
+/* ── 미리보기 패널 ── */
+.preview-panel {
+  background: #dde1e7; overflow-y: auto;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 20px; gap: 14px;
+}
+.preview-actions {
+  display: flex; gap: 10px; width: 100%; max-width: 794px; align-items: center;
+}
+.btn-primary {
+  background: var(--primary); color: var(--white); border: none;
+  border-radius: var(--radius); padding: 9px 18px;
+  font-family: var(--font); font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: background 0.15s;
+}
+.btn-primary:hover { background: #5428d4; }
+.btn-secondary {
+  background: none; border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 7px 14px; font-family: var(--font); font-size: 13px; cursor: pointer;
+}
+.preview-actions span { font-size: 12px; color: var(--gray); margin-left: auto; }
+
+/* ── A4 견적서 ── */
+#qp-wrap { width: 794px; }
+#qp {
+  width: 794px;
+  min-height: 1123px;
+  background: var(--white);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.14);
+  padding: 60px 64px 60px;
+  font-family: var(--font);
+  color: var(--body);
+  position: relative;
+}
+
+/* 견적서 내부 */
+.qp-head {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  margin-bottom: 20px;
+}
+.qp-title { font-size: 34px; font-weight: 700; color: var(--body); letter-spacing: -0.02em; }
+.qp-meta {
+  display: flex; gap: 20px; align-items: center;
+  font-size: 13px; margin-bottom: 28px; flex-wrap: wrap;
+}
+.qp-meta-item { display: flex; gap: 6px; align-items: center; }
+.qp-meta-item .mk { color: var(--gray); font-weight: 500; }
+.qp-meta-item .mv { color: var(--body); font-weight: 600; }
+
+/* 테이블 */
+.qt { width: 100%; border-collapse: collapse; margin-bottom: 0; }
+.qt-head {
+  display: grid;
+  grid-template-columns: 1fr 100px 70px 110px;
+  padding: 16px 14px;
+  border-top: 2px solid var(--body);
+  font-size: 13px; font-weight: 600; color: var(--body);
+}
+.qt-head .c-r { text-align: right; }
+.qt-head .c-c { text-align: center; }
+
+/* 행 공통 */
+.qr {
+  display: grid;
+  grid-template-columns: 1fr 100px 70px 110px;
+  padding: 16px 14px;
+  border-top: 1px solid var(--line);
+  font-size: 13px; font-weight: 600; color: var(--body);
+  align-items: center;
+}
+.qr .c-r { text-align: right; }
+.qr .c-c { text-align: center; }
+.qr .c-gray { color: var(--gray); font-weight: 500; }
+
+/* 플랜 행 */
+.qr-plan {
+  background: var(--primary-bg);
+  border-top: 1px solid var(--primary-border);
+  border-bottom: 1px solid var(--primary-border);
+  margin-bottom: -1px;
+}
+.qr-plan .plan-nm { color: var(--primary); font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+.qr-plan .plan-bullets { display: flex; flex-direction: column; gap: 3px; }
+.qr-plan .plan-bullet { color: var(--gray); font-size: 12px; font-weight: 500; }
+
+/* 섹션 구분 행 */
+.qr-section {
+  background: var(--bg);
+  padding: 8px 14px;
+  font-size: 12px; font-weight: 500; color: var(--gray);
+  border-top: 1px solid var(--line);
+}
+
+/* 합계 박스 */
+.qp-bottom {
+  display: grid; grid-template-columns: 1fr 340px;
+  gap: 16px; margin-top: 32px; align-items: start;
+}
+.qp-notes-box {
+  background: var(--bg); padding: 20px 24px;
+  align-self: stretch;
+}
+.qp-notes-title { font-size: 13px; font-weight: 700; color: var(--body); margin-bottom: 10px; }
+.qp-notes-content { font-size: 12px; color: var(--gray); font-weight: 500; line-height: 1.9; white-space: pre-wrap; }
+.qp-total-box { border: 2px solid var(--body); }
+.qp-total-row {
+  display: flex; justify-content: space-between;
+  padding: 16px 20px; font-size: 13px; font-weight: 600;
+  border-bottom: 1px solid var(--line);
+  color: var(--gray);
+}
+.qp-total-row:last-child { border-bottom: none; background: var(--bg); color: var(--body); }
+.qp-total-row .tl { font-weight: 600; }
+.qp-total-row .tv { font-weight: 700; }
+
+/* 공급자 (하단) */
+.qp-supplier {
+  margin-top: 32px;
+  padding-top: 28px;
+  border-top: 2px solid var(--line);
+}
+.qp-sup-name { font-size: 22px; font-weight: 700; color: var(--body); margin-bottom: 10px; }
+.qp-sup-grid { display: flex; flex-direction: column; gap: 6px; }
+.qp-sup-row { display: flex; gap: 24px; }
+.qp-sup-item { display: flex; gap: 8px; font-size: 12px; font-weight: 500; }
+.qp-sup-item .sk { color: var(--gray); }
+.qp-sup-item .sv { color: var(--body); }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+  <h1>웹사이트 개발 견적서 생성기</h1>
+  <span>오르르디자인 내부 도구</span>
+</header>
+
+<div class="app-body">
+
+<!-- ── 폼 패널 ── -->
+<div class="form-panel">
+
+  <!-- 플랜 -->
+  <div>
+    <div class="sec-title">제작 플랜</div>
+    <div class="plan-cards">
+      <div class="plan-card" data-plan="standard" onclick="selectPlan('standard')">
+        <div class="plan-name">Standard</div>
+        <div class="plan-price">600,000원~</div>
+        <div class="plan-meta">수정 4회 · 추가 150,000/p</div>
+      </div>
+      <div class="plan-card" data-plan="deluxe" onclick="selectPlan('deluxe')">
+        <div class="plan-name">Deluxe</div>
+        <div class="plan-price">900,000원~</div>
+        <div class="plan-meta">수정 4회 · 추가 200,000/p</div>
+      </div>
+      <div class="plan-card" data-plan="premium" onclick="selectPlan('premium')">
+        <div class="plan-name">Premium</div>
+        <div class="plan-price">1,300,000원~</div>
+        <div class="plan-meta">수정 6회 · 추가 300,000/p</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 플랜 상세 항목 -->
+  <div>
+    <div class="sec-title">플랜 상세 항목 <span id="bullet-plan-label" style="font-weight:400;text-transform:none;letter-spacing:0;"></span></div>
+    <div id="bullet-list"></div>
+    <div style="display:flex;gap:6px;margin-top:6px;">
+      <input type="text" id="new-bullet-input" placeholder="항목 입력 후 Enter 또는 + 추가" style="flex:1;">
+      <button class="btn-add" onclick="addBullet()">+ 추가</button>
+    </div>
+  </div>
+
+  <!-- 서브 페이지 -->
+  <div class="form-group">
+    <label>서브 페이지 수 (랜딩 외 추가)</label>
+    <input type="number" id="extra-pages" value="0" min="0" max="30" oninput="render()">
+  </div>
+
+  <!-- 기본 제공 항목 -->
+  <div>
+    <div class="sec-title">기본 제공 항목 <span style="font-weight:400;text-transform:none;letter-spacing:0;">(삭제 가능 · ↩ 복구)</span></div>
+    <div class="default-items" id="default-items"></div>
+  </div>
+
+  <!-- 선택 추가 항목 -->
+  <div>
+    <div class="sec-title">선택 추가 항목</div>
+    <div class="addon-selector" id="addon-selector"></div>
+    <div class="addon-items" id="addon-items"></div>
+    <div class="custom-addon-items" id="custom-addon-items"></div>
+    <div class="custom-addon-add">
+      <input type="text" id="custom-addon-name" placeholder="항목명 직접 입력">
+      <input type="number" id="custom-addon-price" placeholder="금액 (0=협의)" min="0" step="10000">
+      <button class="btn-add-custom" onclick="addCustomAddon()">+ 추가</button>
+    </div>
+  </div>
+
+  <!-- 견적 정보 -->
+  <div>
+    <div class="sec-title">견적 정보</div>
+    <div class="form-group">
+      <label>견적서 제목</label>
+      <input type="text" id="quote-title" value="웹사이트 개발 견적서" oninput="render()">
+    </div>
+    <div class="form-group">
+      <label>수신자명</label>
+      <input type="text" id="recipient" placeholder="홍길동 대표님" oninput="render()">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>견적일자</label>
+        <input type="date" id="quote-date" oninput="render()">
+      </div>
+      <div class="form-group">
+        <label>견적번호</label>
+        <input type="text" id="quote-no" placeholder="202606-01" oninput="render()">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>유효기간</label>
+        <input type="text" id="valid-period" value="견적일로부터 14일" oninput="render()">
+      </div>
+      <div class="form-group">
+        <label>예상 제작기간</label>
+        <input type="text" id="duration" value="약 3-4주" oninput="render()">
+      </div>
+    </div>
+  </div>
+
+  <!-- 공급자 -->
+  <div>
+    <div class="sec-title">공급자 정보</div>
+    <div class="supplier-box">
+      <button class="btn-edit" onclick="toggleSupplierEdit()">수정</button>
+      <div id="supplier-display">
+        <div class="sup-row"><span class="k">상호명</span><span class="v" id="s-company"></span></div>
+        <div class="sup-row"><span class="k">대표자</span><span class="v" id="s-ceo"></span></div>
+        <div class="sup-row"><span class="k">사업자번호</span><span class="v" id="s-bizno"></span></div>
+        <div class="sup-row"><span class="k">주소</span><span class="v" id="s-addr"></span></div>
+        <div class="sup-row"><span class="k">이메일</span><span class="v" id="s-email"></span></div>
+        <div class="sup-row"><span class="k">계좌정보</span><span class="v" id="s-account"></span></div>
+      </div>
+      <div id="supplier-edit-form" class="supplier-edit-form">
+        <div class="form-row">
+          <div class="form-group"><label>상호명</label><input type="text" id="e-company" oninput="updateSupplier()"></div>
+          <div class="form-group"><label>대표자</label><input type="text" id="e-ceo" oninput="updateSupplier()"></div>
+        </div>
+        <div class="form-group"><label>사업자등록번호</label><input type="text" id="e-bizno" oninput="updateSupplier()"></div>
+        <div class="form-group"><label>주소</label><input type="text" id="e-addr" oninput="updateSupplier()"></div>
+        <div class="form-group"><label>이메일</label><input type="text" id="e-email" oninput="updateSupplier()"></div>
+        <div class="form-group"><label>계좌정보</label><input type="text" id="e-account" oninput="updateSupplier()"></div>
+        <button class="btn-primary" style="width:100%;margin-top:4px;" onclick="toggleSupplierEdit()">완료</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 참고사항 -->
+  <div>
+    <div class="sec-title">참고사항</div>
+    <textarea id="notes" rows="4" oninput="render()">1. 호스팅, 도메인, SSL 비용은 별도입니다.
+2. 디자인 원본파일은 미포함합니다.
+3. 추가 요청사항 발생 시 금액이 조정될 수 있습니다.</textarea>
+  </div>
+
+</div><!-- /form-panel -->
+
+<!-- ── 미리보기 패널 ── -->
+<div class="preview-panel">
+  <div class="preview-actions">
+    <button class="btn-primary" onclick="savePDF()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-2px;margin-right:6px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      PDF 저장
+    </button>
+    <span>실시간 미리보기</span>
+  </div>
+
+  <div id="qp-wrap">
+  <div id="qp">
+
+    <!-- 헤더 -->
+    <div class="qp-head">
+      <div class="qp-title" id="q-title">웹사이트 개발 견적서</div>
+      <img id="img-logo" src="https://cdn.imweb.me/thumbnail/20260628/d2b375649594f.png" alt="오르르디자인 로고" style="height:44px;width:auto;object-fit:contain;">
+    </div>
+
+    <!-- 메타 -->
+    <div class="qp-meta">
+      <div class="qp-meta-item"><span class="mk">수신</span><span class="mv" id="q-recipient">—</span></div>
+      <div class="qp-meta-item"><span class="mk">견적일자</span><span class="mv" id="q-date">—</span></div>
+      <div class="qp-meta-item" id="q-no-wrap"><span class="mk">견적번호</span><span class="mv" id="q-no">—</span></div>
+      <div class="qp-meta-item"><span class="mk">유효기간</span><span class="mv" id="q-valid">—</span></div>
+      <div class="qp-meta-item"><span class="mk">예상제작기간</span><span class="mv" id="q-duration">—</span></div>
+    </div>
+
+    <!-- 테이블 헤더 -->
+    <div class="qt-head">
+      <div>항목명</div>
+      <div class="c-r">단가</div>
+      <div class="c-c">수량</div>
+      <div class="c-r">합계</div>
+    </div>
+
+    <!-- 테이블 바디 -->
+    <div id="q-tbody"></div>
+
+    <!-- 하단: 참고사항 + 합계 -->
+    <div class="qp-bottom">
+      <div class="qp-notes-box">
+        <div class="qp-notes-title">참고사항</div>
+        <div class="qp-notes-content" id="q-notes">—</div>
+      </div>
+      <div class="qp-total-box">
+        <div class="qp-total-row"><span class="tl">총 합계</span><span class="tv" id="q-supply">—</span></div>
+        <div class="qp-total-row"><span class="tl">부가세(10%)</span><span class="tv" id="q-vat">—</span></div>
+        <div class="qp-total-row"><span class="tl">최종 견적(VAT 포함)</span><span class="tv" id="q-sum">—</span></div>
+      </div>
+    </div>
+
+    <!-- 공급자 (하단) -->
+    <div class="qp-supplier" style="display:flex;justify-content:space-between;align-items:flex-end;">
+      <div>
+        <div class="qp-sup-name" id="q-sup-name">—</div>
+        <div class="qp-sup-grid" id="q-sup-grid"></div>
+      </div>
+      <img id="img-stamp" src="https://cdn.imweb.me/thumbnail/20260628/3f9608d163291.png" alt="직인" style="height:100px;width:auto;object-fit:contain;opacity:0.9;">
+    </div>
+
+  </div>
+  </div>
+</div>
+
+</div><!-- /app-body -->
+
+<script>
+// ── 데이터 ──
+const PLANS = {
+  standard: { name:'Standard', base:600000, perPage:150000, revisions:4,
+    bullets:['준비된 자료 기반 제작','기본 레이아웃 구성','수정 4회'] },
+  deluxe:   { name:'Deluxe',   base:900000, perPage:200000, revisions:4, best:true,
+    bullets:['브랜드 설문','콘텐츠 구성 제안','수정 4회'] },
+  premium:  { name:'Premium',  base:1300000, perPage:300000, revisions:6,
+    bullets:['브랜드 분석','기획서 작성','수정 6회'] },
+};
+
+const DEFAULT_ITEMS = [
+  { id:'d1', name:'PC/모바일 반응형 웹 디자인 및 개발' },
+  { id:'d2', name:'도메인 연결' },
+  { id:'d3', name:'구글・네이버 검색엔진 등록' },
+  { id:'d4', name:'기본 SEO 설정' },
+  { id:'d5', name:'운영가이드 제공' },
+];
+
+const ADDON_DEFS = [
+  { id:'reservation', name:'예약 시스템',    type:'fixed',      defaultPrice:300000 },
+  { id:'shop',        name:'쇼핑몰 기능',    type:'fixed',      defaultPrice:300000 },
+  { id:'member',      name:'회원 기능',      type:'fixed',      defaultPrice:100000 },
+  { id:'i18n',        name:'다국어 홈페이지', type:'percent',    rate:0.2 },
+  { id:'interaction', name:'고급 인터랙션',  type:'negotiable' },
+  { id:'difficulty',  name:'디자인 난이도',  type:'negotiable' },
+  { id:'logo',        name:'로고 디자인',    type:'negotiable' },
+];
+
+const SUPPLIER_DEFAULT = {
+  company:'오르르디자인', ceo:'성유나', bizNo:'385-32-01629',
+  address:'서울시 영등포구 국회대로36길 6-1, 2층 24A호',
+  email:'contact@orrd.co.kr',
+  account:'카카오뱅크 3333-34-9052671 성유나(오르르디자인)',
+};
+
+// ── 상태 ──
+let state = {
+  plan:'deluxe',
+  deletedDefaults: new Set(),
+  activeAddons: {},
+  customAddons: [],
+  supplier: { ...SUPPLIER_DEFAULT },
+  planBullets: {
+    standard: [...PLANS.standard.bullets],
+    deluxe:   [...PLANS.deluxe.bullets],
+    premium:  [...PLANS.premium.bullets],
+  },
+};
+
+// ── 유틸 ──
+function fmt(n) { return '₩' + Math.round(n).toLocaleString('ko-KR'); }
+function fmtDate(d) { return d ? d.replace(/-/g,'.') : '—'; }
+function today() { return new Date().toISOString().split('T')[0]; }
+
+async function urlToBase64(url) {
+  const res = await fetch(url);
+  const blob = await res.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+// ── 초기화 ──
+async function init() {
+  document.getElementById('quote-date').value = today();
+  renderSupplierDisplay();
+  renderDefaultItems();
+  renderAddonChips();
+  selectPlan('deluxe');
+  ['custom-addon-name','custom-addon-price'].forEach(id =>
+    document.getElementById(id).addEventListener('keydown', e => { if(e.key==='Enter') addCustomAddon(); }));
+  document.getElementById('new-bullet-input').addEventListener('keydown', e => { if(e.key==='Enter') addBullet(); });
+
+  // 이미지 미리 base64로 변환 (PDF 저장 시 CORS 우회)
+  try {
+    const logoEl = document.getElementById('img-logo');
+    const stampEl = document.getElementById('img-stamp');
+    const [logoB64, stampB64] = await Promise.all([
+      urlToBase64(logoEl.src),
+      urlToBase64(stampEl.src),
+    ]);
+    logoEl.src = logoB64;
+    stampEl.src = stampB64;
+  } catch(e) {}
+}
+
+function selectPlan(p) {
+  state.plan = p;
+  document.querySelectorAll('.plan-card').forEach(c => c.classList.toggle('selected', c.dataset.plan === p));
+  renderBullets();
+  render();
+}
+
+// ── 플랜 상세 항목 ──
+function renderBullets() {
+  const p = state.plan;
+  const bullets = state.planBullets[p];
+  document.getElementById('bullet-plan-label').textContent = `(${PLANS[p].name})`;
+  document.getElementById('bullet-list').innerHTML = bullets.map((b, i) => `
+    <div class="item-row" style="gap:6px;">
+      <input type="text" value="${b.replace(/"/g,'&quot;')}" style="flex:1;border:none;background:transparent;font-size:13px;color:var(--body);padding:0;outline:none;"
+        onchange="updateBullet(${i}, this.value)" onblur="updateBullet(${i}, this.value)">
+      <button class="btn-del" onclick="deleteBullet(${i})">✕</button>
+    </div>`).join('');
+}
+
+function updateBullet(i, val) {
+  state.planBullets[state.plan][i] = val.trim();
+  render();
+}
+
+function deleteBullet(i) {
+  state.planBullets[state.plan].splice(i, 1);
+  renderBullets();
+  render();
+}
+
+function addBullet() {
+  const input = document.getElementById('new-bullet-input');
+  const val = input.value.trim();
+  if (!val) return;
+  state.planBullets[state.plan].push(val);
+  input.value = '';
+  renderBullets();
+  render();
+}
+
+// ── 기본 항목 ──
+function renderDefaultItems() {
+  document.getElementById('default-items').innerHTML = DEFAULT_ITEMS.map(item => `
+    <div class="item-row${state.deletedDefaults.has(item.id)?' deleted':''}">
+      <span class="item-name">${item.name}</span>
+      <span class="item-amt">포함</span>
+      ${state.deletedDefaults.has(item.id)
+        ? `<button class="btn-restore" onclick="restoreDefault('${item.id}')">↩</button>`
+        : `<button class="btn-del" onclick="deleteDefault('${item.id}')">✕</button>`}
+    </div>`).join('');
+}
+function deleteDefault(id) { state.deletedDefaults.add(id); renderDefaultItems(); render(); }
+function restoreDefault(id) { state.deletedDefaults.delete(id); renderDefaultItems(); render(); }
+
+// ── 추가 항목 ──
+function renderAddonChips() {
+  document.getElementById('addon-selector').innerHTML = ADDON_DEFS.map(a => `
+    <div class="addon-chip${state.activeAddons[a.id]!==undefined?' active':''}" onclick="toggleAddon('${a.id}')">${a.name}</div>`).join('');
+}
+
+function toggleAddon(id) {
+  if (state.activeAddons[id] !== undefined) { delete state.activeAddons[id]; }
+  else {
+    const d = ADDON_DEFS.find(a=>a.id===id);
+    if (d.type==='fixed') state.activeAddons[id] = { price: d.defaultPrice };
+    else if (d.type==='percent') state.activeAddons[id] = { langCount:1 };
+    else state.activeAddons[id] = { negotiable_price:'' };
+  }
+  renderAddonChips(); renderAddonItems(); render();
+}
+
+function renderAddonItems() {
+  const extraPages = Math.max(0, parseInt(document.getElementById('extra-pages').value)||0);
+  const plan = PLANS[state.plan];
+  const baseForPercent = plan.base + extraPages * plan.perPage;
+  const active = ADDON_DEFS.filter(a => state.activeAddons[a.id] !== undefined);
+  document.getElementById('addon-items').innerHTML = active.map(a => {
+    const s = state.activeAddons[a.id];
+    if (a.type==='fixed') return `<div class="addon-item">
+      <span class="addon-name">${a.name}</span>
+      <input type="number" value="${s.price}" min="0" step="10000" onchange="state.activeAddons['${a.id}'].price=Number(this.value);render()">
+      <span class="addon-label">원</span>
+      <button class="btn-del" onclick="toggleAddon('${a.id}')">✕</button></div>`;
+    if (a.type==='percent') {
+      const calc = baseForPercent*0.2*(s.langCount||1);
+      return `<div class="addon-item">
+        <span class="addon-name">${a.name}</span>
+        <input type="number" value="${s.langCount||1}" min="1" max="10" onchange="state.activeAddons['${a.id}'].langCount=Number(this.value);renderAddonItems();render()">
+        <span class="addon-label">개 언어 → ${fmt(calc)}</span>
+        <button class="btn-del" onclick="toggleAddon('${a.id}')">✕</button></div>`;
+    }
+    return `<div class="addon-item">
+      <span class="addon-name">${a.name}</span>
+      <input type="text" placeholder="금액 또는 비워두면 협의" value="${s.negotiable_price||''}" onchange="state.activeAddons['${a.id}'].negotiable_price=this.value;render()">
+      <span class="addon-label">원</span>
+      <button class="btn-del" onclick="toggleAddon('${a.id}')">✕</button></div>`;
+  }).join('');
+}
+
+// ── 직접 입력 추가 항목 ──
+function addCustomAddon() {
+  const ne = document.getElementById('custom-addon-name');
+  const pe = document.getElementById('custom-addon-price');
+  const name = ne.value.trim(); if (!name) { ne.focus(); return; }
+  state.customAddons.push({ id:'c_'+Date.now(), name, price: parseFloat(pe.value)||0 });
+  ne.value=''; pe.value='';
+  renderCustomAddonItems(); render();
+}
+function removeCustomAddon(id) {
+  state.customAddons = state.customAddons.filter(a=>a.id!==id);
+  renderCustomAddonItems(); render();
+}
+function updateCustomAddon(id, field, value) {
+  const item = state.customAddons.find(a=>a.id===id);
+  if (item) { item[field] = field==='price'?(parseFloat(value)||0):value; render(); }
+}
+function renderCustomAddonItems() {
+  document.getElementById('custom-addon-items').innerHTML = state.customAddons.map(a => `
+    <div class="custom-addon-item">
+      <input type="text" value="${a.name.replace(/"/g,'&quot;')}" style="flex:1;font-size:12px;padding:4px 7px;" onchange="updateCustomAddon('${a.id}','name',this.value)">
+      <input type="number" value="${a.price}" min="0" step="10000" onchange="updateCustomAddon('${a.id}','price',this.value)">
+      <span style="font-size:11px;color:var(--gray);">원 (0=협의)</span>
+      <button class="btn-del" onclick="removeCustomAddon('${a.id}')">✕</button>
+    </div>`).join('');
+}
+
+// ── 공급자 ──
+function renderSupplierDisplay() {
+  const s = state.supplier;
+  document.getElementById('s-company').textContent = s.company;
+  document.getElementById('s-ceo').textContent = s.ceo;
+  document.getElementById('s-bizno').textContent = s.bizNo;
+  document.getElementById('s-addr').textContent = s.address;
+  document.getElementById('s-email').textContent = s.email;
+  document.getElementById('s-account').textContent = s.account;
+  document.getElementById('e-company').value = s.company;
+  document.getElementById('e-ceo').value = s.ceo;
+  document.getElementById('e-bizno').value = s.bizNo;
+  document.getElementById('e-addr').value = s.address;
+  document.getElementById('e-email').value = s.email;
+  document.getElementById('e-account').value = s.account;
+}
+function updateSupplier() {
+  state.supplier = {
+    company: document.getElementById('e-company').value,
+    ceo:     document.getElementById('e-ceo').value,
+    bizNo:   document.getElementById('e-bizno').value,
+    address: document.getElementById('e-addr').value,
+    email:   document.getElementById('e-email').value,
+    account: document.getElementById('e-account').value,
+  };
+  renderSupplierDisplay(); render();
+}
+let supplierEditOpen = false;
+function toggleSupplierEdit() {
+  supplierEditOpen = !supplierEditOpen;
+  document.getElementById('supplier-display').classList.toggle('hide', supplierEditOpen);
+  document.getElementById('supplier-edit-form').classList.toggle('show', supplierEditOpen);
+}
+
+// ── 렌더링 ──
+function render() {
+  const plan = PLANS[state.plan];
+  const extraPages = Math.max(0, parseInt(document.getElementById('extra-pages').value)||0);
+  const baseForPercent = plan.base + extraPages * plan.perPage;
+
+  // 금액 계산
+  let supply = plan.base + extraPages * plan.perPage;
+  let negotiableItems = [];
+  ADDON_DEFS.filter(a => state.activeAddons[a.id]!==undefined).forEach(a => {
+    const ad = state.activeAddons[a.id];
+    if (a.type==='fixed') supply += ad.price;
+    else if (a.type==='percent') supply += baseForPercent * a.rate * (ad.langCount||1);
+    else { const p=parseFloat(ad.negotiable_price); if(!isNaN(p)&&p>0) supply+=p; else negotiableItems.push(a.name); }
+  });
+  state.customAddons.forEach(a => { if(a.price>0) supply+=a.price; else negotiableItems.push(a.name); });
+  const vat = supply * 0.1;
+  const total = supply + vat;
+
+  // 메타
+  const quoteTitle = document.getElementById('quote-title').value || '웹사이트 개발 견적서';
+  document.getElementById('q-title').textContent = quoteTitle;
+  const recipient = document.getElementById('recipient').value || '—';
+  document.getElementById('q-recipient').textContent = recipient;
+  document.getElementById('q-date').textContent = fmtDate(document.getElementById('quote-date').value);
+  const qNo = document.getElementById('quote-no').value;
+  document.getElementById('q-no').textContent = qNo || '—';
+  document.getElementById('q-no-wrap').style.display = qNo ? '' : 'none';
+  document.getElementById('q-valid').textContent = document.getElementById('valid-period').value || '—';
+  document.getElementById('q-duration').textContent = document.getElementById('duration').value || '—';
+
+  // 테이블
+  let html = '';
+
+  // 플랜 행
+  const bullets = state.planBullets[state.plan].map(b=>`<div class="plan-bullet">${b}</div>`).join('');
+  html += `<div class="qr qr-plan">
+    <div><div class="plan-nm">${plan.name} 플랜</div><div class="plan-bullets">${bullets}</div></div>
+    <div class="c-r"></div>
+    <div class="c-c"></div>
+    <div class="c-r">${fmt(plan.base)}</div>
+  </div>`;
+
+  // 서브 페이지
+  if (extraPages > 0) {
+    html += `<div class="qr">
+      <div>서브 페이지</div>
+      <div class="c-r">${fmt(plan.perPage)}</div>
+      <div class="c-c">${extraPages}</div>
+      <div class="c-r">${fmt(extraPages * plan.perPage)}</div>
+    </div>`;
+  }
+
+  // 선택 추가 항목
+  const activeAddonDefs = ADDON_DEFS.filter(a=>state.activeAddons[a.id]!==undefined);
+  const hasExtra = activeAddonDefs.length>0 || state.customAddons.length>0;
+
+  activeAddonDefs.forEach(a => {
+    const ad = state.activeAddons[a.id];
+    let unitStr='', qtyStr='', totalStr;
+    if (a.type==='fixed') {
+      totalStr = fmt(ad.price);
+    } else if (a.type==='percent') {
+      const c = baseForPercent * a.rate * (ad.langCount||1);
+      unitStr = fmt(baseForPercent * a.rate);
+      qtyStr = String(ad.langCount||1);
+      totalStr = fmt(c);
+    } else {
+      const p = parseFloat(ad.negotiable_price);
+      totalStr = (!isNaN(p)&&p>0) ? fmt(p) : '<span class="c-gray">별도 협의</span>';
+    }
+    html += `<div class="qr">
+      <div>${a.name}</div>
+      <div class="c-r">${unitStr}</div>
+      <div class="c-c">${qtyStr}</div>
+      <div class="c-r">${totalStr}</div>
+    </div>`;
+  });
+
+  state.customAddons.forEach(a => {
+    const totalStr = a.price>0 ? fmt(a.price) : '<span class="c-gray">별도 협의</span>';
+    html += `<div class="qr">
+      <div>${a.name}</div>
+      <div class="c-r"></div>
+      <div class="c-c"></div>
+      <div class="c-r">${totalStr}</div>
+    </div>`;
+  });
+
+  // 고정 노출 항목 (호스팅/SSL, 디자인 원본파일)
+  html += `<div class="qr">
+    <div>호스팅/도메인/SSL</div>
+    <div class="c-r"></div><div class="c-c"></div>
+    <div class="c-r c-gray">별도</div>
+  </div>`;
+  html += `<div class="qr">
+    <div>디자인 원본파일</div>
+    <div class="c-r"></div><div class="c-c"></div>
+    <div class="c-r c-gray">미포함</div>
+  </div>`;
+
+  // 기본 제공 항목 섹션
+  const activeDefaults = DEFAULT_ITEMS.filter(item=>!state.deletedDefaults.has(item.id));
+  if (activeDefaults.length>0) {
+    html += `<div class="qr-section">기본 제공 항목</div>`;
+    activeDefaults.forEach(item => {
+      html += `<div class="qr">
+        <div>${item.name}</div>
+        <div class="c-r"></div><div class="c-c"></div>
+        <div class="c-r"></div>
+      </div>`;
+    });
+  }
+
+  document.getElementById('q-tbody').innerHTML = html;
+
+  // 합계
+  document.getElementById('q-supply').textContent = fmt(supply);
+  document.getElementById('q-vat').textContent = fmt(vat);
+  document.getElementById('q-sum').textContent = fmt(total);
+
+  // 참고사항
+  const notes = document.getElementById('notes').value;
+  const extraNote = negotiableItems.length>0 ? `\n* ${negotiableItems.join(', ')} 항목은 별도 협의 후 확정됩니다.` : '';
+  document.getElementById('q-notes').textContent = (notes||'') + extraNote || '—';
+
+  // 공급자 (하단)
+  const s = state.supplier;
+  document.getElementById('q-sup-name').textContent = s.company;
+  document.getElementById('q-sup-grid').innerHTML = `
+    <div class="qp-sup-row">
+      <div class="qp-sup-item"><span class="sk">사업자</span><span class="sv">${s.bizNo}</span></div>
+      <div class="qp-sup-item"><span class="sk">주소</span><span class="sv">${s.address}</span></div>
+    </div>
+    <div class="qp-sup-row">
+      <div class="qp-sup-item"><span class="sk">이메일</span><span class="sv">${s.email}</span></div>
+      <div class="qp-sup-item"><span class="sk">계좌정보</span><span class="sv">${s.account}</span></div>
+    </div>`;
+
+  renderAddonItems();
+}
+
+// ── PDF 저장 ──
+async function savePDF() {
+  const recipient = document.getElementById('recipient').value || '수신자';
+  const qDate = document.getElementById('quote-date').value || today();
+  const filename = `견적서_${recipient}_${qDate}.pdf`;
+  const btn = document.querySelector('.btn-primary');
+  btn.textContent = '생성 중...'; btn.disabled = true;
+
+  const A4W = 794, A4H = 1123;
+  const el = document.getElementById('qp');
+
+  // 캡처 전 스타일 초기화
+  el.style.transform = 'none';
+  el.style.width = A4W + 'px';
+  el.style.minHeight = 'auto';
+
+  await new Promise(r => requestAnimationFrame(r));
+  await new Promise(r => requestAnimationFrame(r));
+
+  try {
+    const canvas = await html2canvas(el, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      logging: false,
+      width: A4W,
+      windowWidth: A4W,
+      onclone: (cloneDoc, cloneEl) => {
+        cloneEl.style.position = 'fixed';
+        cloneEl.style.top = '0';
+        cloneEl.style.left = '0';
+        cloneEl.style.margin = '0';
+        cloneEl.style.transform = 'none';
+        cloneEl.style.width = A4W + 'px';
+      },
+    });
+
+    const imgData = canvas.toDataURL('image/jpeg', 0.98);
+
+    // A4 in pt (PDF native unit): 595.28 × 841.89
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+    const pageW = pdf.internal.pageSize.getWidth();   // 595.28pt
+    const pageH = pdf.internal.pageSize.getHeight();  // 841.89pt
+
+    // 이미지를 A4 전체에 꽉 채움 (항상 A4 한 장 보장)
+    pdf.addImage(imgData, 'JPEG', 0, 0, pageW, pageH);
+    pdf.save(filename);
+  } catch(e) { alert('PDF 오류: ' + e.message); }
+
+  el.style.transform = '';
+  el.style.width = '';
+  el.style.minHeight = '';
+  btn.textContent = 'PDF 저장'; btn.disabled = false;
+}
+
+init();
+</script>
+</body>
+</html>
